@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Source Visualizer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090718;
+      --panel: rgba(21, 17, 48, .78);
+      --line: rgba(224, 179, 255, .22);
+      --text: #f4f7ff;
+      --muted: #94a0bd;
+      --accent: #70f7d5;
+      --accent-2: #b77dff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: stretch;
+      padding: 0;
+      overflow-x: hidden;
+      color: var(--text);
+      font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      background: radial-gradient(circle at 12% 16%, rgba(255, 76, 174, .2), transparent 28%), radial-gradient(circle at 88% 82%, rgba(78, 118, 255, .2), transparent 30%), var(--bg);
+    }
+    .app { width: 100vw; min-height: 100vh; }
+    .eyebrow, h1, .subtitle { display: none; }
+    .ui-toggle { position: fixed; top: 18px; right: 18px; z-index: 5; padding: 9px 12px; border-color: rgba(255, 255, 255, .24); background: rgba(13, 10, 27, .72); backdrop-filter: blur(12px); }
+    .eyebrow { margin: 0; padding: 28px 32px 0; color: #ff78c8; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 11px; }
+    h1 { margin: 10px 32px 0; font-size: clamp(32px, 6vw, 60px); line-height: 1; letter-spacing: -.055em; }
+    .subtitle { max-width: 600px; margin: 16px 32px 28px; color: var(--muted); font-size: 16px; }
+    .visual { position: fixed; inset: 0; z-index: 1; overflow: hidden; border: 0; border-radius: 0; background: radial-gradient(circle at 18% 20%, rgba(255, 70, 181, .2), transparent 30%), radial-gradient(circle at 83% 75%, rgba(66, 101, 255, .24), transparent 36%), linear-gradient(145deg, rgba(47, 26, 87, .7), rgba(9, 7, 25, .94)); box-shadow: 0 24px 80px rgba(119, 46, 255, .2), 0 0 0 1px rgba(255, 113, 213, .08) inset; }
+    canvas { width: 100%; height: 100%; display: block; }
+    .visual::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(transparent 49.8%, rgba(255,255,255,.07) 50%, transparent 50.2%); background-size: 100% 34px; mix-blend-mode: screen; }
+    .cartoon-window { position: absolute; top: 18px; left: 18px; z-index: 2; width: min(250px, 42%); min-width: 150px; max-width: 70%; overflow: hidden; resize: both; border: 1px solid rgba(255, 255, 255, .28); border-radius: 14px; background: #0d0a1b; box-shadow: 0 12px 34px rgba(0, 0, 0, .45), 0 0 24px rgba(255, 92, 203, .2); }
+    .cartoon-window iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; background: linear-gradient(135deg, #27104f, #101d4c); }
+    .cartoon-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 9px; color: #d7cfee; font-size: 11px; cursor: grab; user-select: none; }
+    .cartoon-bar:active { cursor: grabbing; }
+    .cartoon-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cartoon-bar button { padding: 4px 7px; border-radius: 7px; font-size: 11px; }
+    .status { position: absolute; top: 18px; left: 20px; display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
+    .controls { display: none; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; position: fixed; right: 24px; bottom: 58px; left: 24px; z-index: 4; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); backdrop-filter: blur(16px); }
+    .track { min-width: 0; }
+    .track-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+    .track-meta { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    button, .file-label { border: 1px solid rgba(255,255,255,.15); border-radius: 11px; padding: 11px 15px; color: var(--text); font: inherit; font-weight: 700; cursor: pointer; background: rgba(255,255,255,.07); transition: .2s ease; }
+    button:hover, .file-label:hover { border-color: var(--accent); transform: translateY(-1px); }
+    button.primary { border: 0; color: #10081d; background: linear-gradient(135deg, #70f7d5, #ffe169 48%, #ff78c8); }
+    input[type=file] { display: none; }
+    .options { display: none; flex-wrap: wrap; gap: 10px; position: fixed; right: 24px; bottom: 14px; left: 24px; z-index: 4; margin: 0; color: var(--muted); font-size: 13px; }
+    body.ui-open .controls { display: grid; }
+    body.ui-open .options { display: flex; }
+    .options label { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.035); }
+    input[type=range] { width: 130px; accent-color: var(--accent); }
+    @media (max-width: 650px) { .controls { grid-template-columns: 1fr 1fr; } .track { grid-column: 1 / -1; } button, .file-label { text-align: center; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <button class="ui-toggle" id="uiToggle">Show controls</button>
+    <p class="eyebrow">Direct source analysis</p>
+    <h1>Hear the source.<br><span style="color:var(--accent)">See the signal.</span></h1>
+    <p class="subtitle">Drop in an audio file, or capture the sound from the current browser tab. The visualizer reads the live Web Audio stream itself — no microphone required.</p>
+    <section class="visual" aria-label="Audio visualizer">
+      <canvas id="visualizer"></canvas>
+      <div class="status"><span class="dot" id="statusDot"></span><span id="status">Ready for an audio source</span></div>
+      <div class="cartoon-window">
+        <iframe id="cartoon" title="Muted YouTube video" src="https://www.youtube.com/embed/zSJRUojx3dE?autoplay=1&mute=1&loop=1&playlist=zSJRUojx3dE&controls=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        <div class="cartoon-bar">
+          <span id="cartoonLabel">Drag corner to resize</span>
+          <a class="file-label" href="https://www.youtube.com/watch?v=zSJRUojx3dE" target="_blank" rel="noopener">Open on YouTube</a>
+        </div>
+      </div>
+    </section>
+    <section class="controls">
+      <div class="track">
+        <div class="track-title" id="trackTitle">No source selected</div>
+        <div class="track-meta" id="trackMeta">Choose a file or capture a browser tab</div>
+      </div>
+      <label class="file-label" for="fileInput">Choose file</label>
+      <button class="primary" id="captureButton">Capture tab audio</button>
+      <input id="fileInput" type="file" accept="audio/*">
+      <audio id="player" controls preload="metadata" hidden></audio>
+    </section>
+    <div class="options">
+      <label>Glow <input id="glow" type="range" min="0" max="30" value="12"></label>
+      <label>Bars <input id="bars" type="range" min="32" max="180" value="96"></label>
+      <button id="pauseButton">Pause animation</button>
+    </div>
+  </main>
+  <script>
+    const canvas = document.getElementById("visualizer");
+    const ctx = canvas.getContext("2d");
+    const player = document.getElementById("player");
+    const fileInput = document.getElementById("fileInput");
+    const captureButton = document.getElementById("captureButton");
+    const pauseButton = document.getElementById("pauseButton");
+    const status = document.getElementById("status");
+    const statusDot = document.getElementById("statusDot");
+    const title = document.getElementById("trackTitle");
+    const meta = document.getElementById("trackMeta");
+    const glow = document.getElementById("glow");
+    const bars = document.getElementById("bars");
+    const uiToggle = document.getElementById("uiToggle");
+    const cartoonWindow = document.querySelector(".cartoon-window");
+    const cartoonBar = document.querySelector(".cartoon-bar");
+    let audioContext;
+    let analyser;
+    let source;
+    let mediaElementSource;
+    let stream;
+    let animationPaused = false;
+    let objectUrl;
+    let dragState;
+    uiToggle.addEventListener("click", () => {
+      document.body.classList.toggle("ui-open");
+      uiToggle.textContent = document.body.classList.contains("ui-open") ? "Hide controls" : "Show controls";
+    });
+
+    function resize() {
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = canvas.clientWidth * ratio;
+      canvas.height = canvas.clientHeight * ratio;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+    function setupAnalyser() {
+      if (!audioContext) audioContext = new AudioContext();
+      if (!analyser) {
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = .82;
+      }
+    }
+    function connect(node) {
+      setupAnalyser();
+      if (source) source.disconnect();
+      source = node;
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+      audioContext.resume();
+    }
+    function setStatus(message, active = true) {
+      status.textContent = message;
+      statusDot.style.background = active ? "var(--accent)" : "var(--muted)";
+      statusDot.style.boxShadow = active ? "0 0 16px var(--accent)" : "none";
+    }
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = URL.createObjectURL(file);
+      player.src = objectUrl;
+      setupAnalyser();
+      if (!mediaElementSource) mediaElementSource = audioContext.createMediaElementSource(player);
+      connect(mediaElementSource);
+      title.textContent = file.name;
+      meta.textContent = `${(file.size / 1048576).toFixed(2)} MB · local source`;
+      setStatus("Analyzing local source");
+      player.hidden = false;
+      player.play().catch(() => setStatus("Press play to start the source"));
+    });
+    captureButton.addEventListener("click", async () => {
+      try {
+        if (!navigator.mediaDevices?.getDisplayMedia) throw new Error("Tab capture is not supported in this browser.");
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        if (!stream.getAudioTracks().length) throw new Error("No audio track was shared. Enable the tab audio checkbox and try again.");
+        setupAnalyser();
+        connect(audioContext.createMediaStreamSource(stream));
+        stream.getVideoTracks().forEach(track => track.stop());
+        stream.getAudioTracks()[0].addEventListener("ended", () => setStatus("Capture ended", false));
+        title.textContent = "Live browser source";
+        meta.textContent = "Streaming directly from the shared tab or window";
+        setStatus("Listening to live source");
+        captureButton.textContent = "Capture again";
+      } catch (error) {
+        setStatus(error.message || "Unable to capture this source", false);
+      }
+    });
+    pauseButton.addEventListener("click", () => {
+      animationPaused = !animationPaused;
+      pauseButton.textContent = animationPaused ? "Resume animation" : "Pause animation";
+    });
+    cartoonBar.addEventListener("pointerdown", event => {
+      if (event.target.closest("a, button, input")) return;
+      const windowRect = cartoonWindow.getBoundingClientRect();
+      const visualRect = document.querySelector(".visual").getBoundingClientRect();
+      cartoonWindow.style.right = "auto";
+      cartoonWindow.style.bottom = "auto";
+      cartoonWindow.style.left = `${windowRect.left - visualRect.left}px`;
+      cartoonWindow.style.top = `${windowRect.top - visualRect.top}px`;
+      dragState = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - windowRect.left,
+        offsetY: event.clientY - windowRect.top
+      };
+      cartoonBar.setPointerCapture(event.pointerId);
+    });
+    cartoonBar.addEventListener("pointermove", event => {
+      if (!dragState || event.pointerId !== dragState.pointerId) return;
+      const visualRect = document.querySelector(".visual").getBoundingClientRect();
+      const maxLeft = Math.max(0, visualRect.width - cartoonWindow.offsetWidth);
+      const maxTop = Math.max(0, visualRect.height - cartoonWindow.offsetHeight);
+      const left = Math.min(maxLeft, Math.max(0, event.clientX - visualRect.left - dragState.offsetX));
+      const top = Math.min(maxTop, Math.max(0, event.clientY - visualRect.top - dragState.offsetY));
+      cartoonWindow.style.left = `${left}px`;
+      cartoonWindow.style.top = `${top}px`;
+    });
+    cartoonBar.addEventListener("pointerup", () => { dragState = null; });
+    cartoonBar.addEventListener("pointercancel", () => { dragState = null; });
+    function draw() {
+      requestAnimationFrame(draw);
+      if (animationPaused) return;
+      const width = canvas.clientWidth, height = canvas.clientHeight;
+      ctx.clearRect(0, 0, width, height);
+      const time = performance.now() / 1000;
+      const hue = (time * 18) % 360;
+      const ambient = ctx.createRadialGradient(width * .5, height * .82, 0, width * .5, height * .82, height * .9);
+      ambient.addColorStop(0, `hsla(${hue}, 100%, 65%, .16)`);
+      ambient.addColorStop(.55, `hsla(${(hue + 90) % 360}, 100%, 60%, .06)`);
+      ambient.addColorStop(1, "transparent");
+      ctx.fillStyle = ambient;
+      ctx.fillRect(0, 0, width, height);
+      const count = Number(bars.value);
+      if (!analyser) {
+        ctx.fillStyle = "rgba(121,242,208,.13)";
+        ctx.fillRect(0, height * .5 - 1, width, 2);
+        return;
+      }
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      const gap = Math.min(3, width / count);
+      const barWidth = Math.max(1, (width - gap * (count - 1)) / count);
+      ctx.shadowBlur = Number(glow.value);
+      for (let i = 0; i < count; i++) {
+        // Keep all bars in the musical range; the highest FFT bins are usually silent.
+        const pairCount = Math.ceil(count / 2);
+        const pairIndex = Math.floor(i / 2);
+        const position = pairIndex / Math.max(1, pairCount - 1);
+        const frequencyIndex = Math.min(data.length - 1, Math.floor(Math.pow(position, 1.35) * data.length * .1785));
+        const neighbor = data[Math.min(data.length - 1, frequencyIndex + 2)];
+        const rawValue = (data[frequencyIndex] * .7 + neighbor * .3) / 255;
+        // Use restrained compression so loud tracks keep visible height variation.
+        const boostedValue = Math.pow(rawValue, .9) * .78 * (1 + position * .35);
+        const value = Math.min(.95, Math.max(.025, boostedValue));
+        const barHeight = Math.max(4, value * height * .82);
+        const x = Math.min(width - barWidth, i * (barWidth + gap));
+        const barHue = (hue + i * 2.8) % 360;
+        ctx.shadowColor = `hsl(${barHue}, 100%, 65%)`;
+        ctx.fillStyle = `hsl(${barHue}, 100%, ${58 + value * 22}%)`;
+        ctx.fillRect(x, height - barHeight - 22, barWidth, barHeight);
+      }
+      ctx.shadowBlur = 0;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+    draw();
+  </script>
+</body>
+</html>
