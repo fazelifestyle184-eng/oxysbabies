@@ -76,7 +76,10 @@
         <iframe id="cartoon" title="Muted YouTube video" src="https://www.youtube.com/embed/zSJRUojx3dE?autoplay=1&mute=1&loop=1&playlist=zSJRUojx3dE&controls=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
         <div class="cartoon-bar">
           <span id="cartoonLabel">Drag corner to resize</span>
-          <a class="file-label" href="https://www.youtube.com/watch?v=zSJRUojx3dE" target="_blank" rel="noopener">Open on YouTube</a>
+          <div>
+            <a class="file-label" href="https://www.youtube.com/watch?v=zSJRUojx3dE" target="_blank" rel="noopener">Open on YouTube</a>
+            <button id="closeCartoon" type="button">Close</button>
+          </div>
         </div>
       </div>
     </section>
@@ -98,6 +101,7 @@
       <label>Glow <input id="glow" type="range" min="0" max="30" value="12"></label>
       <label>Bars <input id="bars" type="range" min="32" max="180" value="96"></label>
       <button id="pauseButton">Pause animation</button>
+      <button id="showCartoon" type="button" hidden>Show video window</button>
     </div>
   </main>
   <script>
@@ -119,6 +123,8 @@
     const cartoonFrame = document.getElementById("cartoon");
     const linkForm = document.getElementById("linkForm");
     const videoUrl = document.getElementById("videoUrl");
+    const closeCartoon = document.getElementById("closeCartoon");
+    const showCartoon = document.getElementById("showCartoon");
     let audioContext;
     let analyser;
     let source;
@@ -194,6 +200,14 @@
     pauseButton.addEventListener("click", () => {
       animationPaused = !animationPaused;
       pauseButton.textContent = animationPaused ? "Resume animation" : "Pause animation";
+    });
+    closeCartoon.addEventListener("click", () => {
+      cartoonWindow.hidden = true;
+      showCartoon.hidden = false;
+    });
+    showCartoon.addEventListener("click", () => {
+      cartoonWindow.hidden = false;
+      showCartoon.hidden = true;
     });
     linkForm.addEventListener("submit", event => {
       event.preventDefault();
