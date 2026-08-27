@@ -48,6 +48,9 @@
     .track { min-width: 0; }
     .track-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
     .track-meta { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .link-form { display: flex; min-width: 260px; gap: 7px; }
+    .link-form input { min-width: 0; width: 220px; border: 1px solid rgba(255,255,255,.15); border-radius: 11px; padding: 11px 12px; color: var(--text); font: inherit; background: rgba(255,255,255,.07); }
+    .link-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     button, .file-label { border: 1px solid rgba(255,255,255,.15); border-radius: 11px; padding: 11px 15px; color: var(--text); font: inherit; font-weight: 700; cursor: pointer; background: rgba(255,255,255,.07); transition: .2s ease; }
     button:hover, .file-label:hover { border-color: var(--accent); transform: translateY(-1px); }
     button.primary { border: 0; color: #10081d; background: linear-gradient(135deg, #70f7d5, #ffe169 48%, #ff78c8); }
@@ -84,6 +87,10 @@
       </div>
       <label class="file-label" for="fileInput">Choose file</label>
       <button class="primary" id="captureButton">Capture tab audio</button>
+      <form class="link-form" id="linkForm">
+        <input id="videoUrl" type="url" placeholder="Paste YouTube link" aria-label="YouTube video link">
+        <button type="submit">Load video</button>
+      </form>
       <input id="fileInput" type="file" accept="audio/*">
       <audio id="player" controls preload="metadata" hidden></audio>
     </section>
@@ -109,6 +116,9 @@
     const uiToggle = document.getElementById("uiToggle");
     const cartoonWindow = document.querySelector(".cartoon-window");
     const cartoonBar = document.querySelector(".cartoon-bar");
+    const cartoonFrame = document.getElementById("cartoon");
+    const linkForm = document.getElementById("linkForm");
+    const videoUrl = document.getElementById("videoUrl");
     let audioContext;
     let analyser;
     let source;
@@ -185,6 +195,28 @@
       animationPaused = !animationPaused;
       pauseButton.textContent = animationPaused ? "Resume animation" : "Pause animation";
     });
+    linkForm.addEventListener("submit", event => {
+      event.preventDefault();
+      let videoId = null;
+      try {
+        const url = new URL(videoUrl.value.trim());
+        if (url.hostname === "youtu.be") videoId = url.pathname.slice(1).split("/")[0];
+        else if (url.hostname.endsWith("youtube.com")) videoId = url.searchParams.get("v");
+      } catch {
+        setStatus("Enter a valid YouTube link", false);
+        return;
+      }
+      if (!videoId || !/^[\w-]{11}$/.test(videoId)) {
+        setStatus("Enter a valid YouTube link", false);
+        return;
+      }
+      cartoonFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=1&rel=0`;
+      const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      cartoonFrame.title = "Muted YouTube video";
+      document.querySelector(".cartoon-bar a").href = watchUrl;
+      document.getElementById("cartoonLabel").textContent = "Muted YouTube video";
+      setStatus("Video window updated");
+    });
     cartoonBar.addEventListener("pointerdown", event => {
       if (event.target.closest("a, button, input")) return;
       const windowRect = cartoonWindow.getBoundingClientRect();
@@ -232,7 +264,9 @@
         return;
       }
       const data = new Uint8Array(analyser.frequencyBinCount);
+      const waveform = new Uint8Array(analyser.fftSize);
       analyser.getByteFrequencyData(data);
+      analyser.getByteTimeDomainData(waveform);
       const gap = Math.min(3, width / count);
       const barWidth = Math.max(1, (width - gap * (count - 1)) / count);
       ctx.shadowBlur = Number(glow.value);
@@ -254,6 +288,32 @@
         ctx.fillStyle = `hsl(${barHue}, 100%, ${58 + value * 22}%)`;
         ctx.fillRect(x, height - barHeight - 22, barWidth, barHeight);
       }
+      const waveGradient = ctx.createLinearGradient(0, 0, width, 0);
+      waveGradient.addColorStop(0, "#70f7d5");
+      waveGradient.addColorStop(.35, "#ffe169");
+      waveGradient.addColorStop(.68, "#ff78c8");
+      waveGradient.addColorStop(1, "#8b7cff");
+      ctx.shadowBlur = Number(glow.value) * .7;
+      ctx.shadowColor = "#ff78c8";
+      ctx.strokeStyle = waveGradient;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < waveform.length; i += 4) {
+        const x = i / (waveform.length - 1) * width;
+        const barIndex = Math.min(count - 1, Math.floor(x / width * count));
+        const pairCount = Math.ceil(count / 2);
+        const pairIndex = Math.floor(barIndex / 2);
+        const position = pairIndex / Math.max(1, pairCount - 1);
+        const frequencyIndex = Math.min(data.length - 1, Math.floor(Math.pow(position, 1.35) * data.length * .1785));
+        const neighbor = data[Math.min(data.length - 1, frequencyIndex + 2)];
+        const rawValue = (data[frequencyIndex] * .7 + neighbor * .3) / 255;
+        const barValue = Math.min(.95, Math.max(.025, Math.pow(rawValue, .9) * .78 * (1 + position * .35)));
+        const barTop = height - Math.max(4, barValue * height * .82) - 22;
+        const y = barTop - 3 + (waveform[i] - 128) / 128 * 5;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
       ctx.shadowBlur = 0;
     }
     window.addEventListener("resize", resize);
