@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#080912">
   <title>Source Visualizer</title>
   <style>
     :root {
@@ -25,15 +27,16 @@
       overflow-x: hidden;
       color: var(--text);
       font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
-      background: radial-gradient(circle at 12% 16%, rgba(255, 76, 174, .2), transparent 28%), radial-gradient(circle at 88% 82%, rgba(78, 118, 255, .2), transparent 30%), var(--bg);
+      background: #080912;
     }
     .app { width: 100vw; min-height: 100vh; }
     .eyebrow, h1, .subtitle { display: none; }
-    .ui-toggle { position: fixed; top: 18px; right: 18px; z-index: 5; padding: 9px 12px; border-color: rgba(255, 255, 255, .24); background: rgba(13, 10, 27, .72); backdrop-filter: blur(12px); }
+    body.show-copy .eyebrow, body.show-copy h1, body.show-copy .subtitle { display: block; }
+    .ui-toggle { position: fixed; top: 18px; right: 18px; z-index: 5; padding: 9px 12px; border-color: rgba(255, 255, 255, .24); background: rgba(8, 9, 18, .9); box-shadow: 0 8px 24px rgba(0, 0, 0, .3); backdrop-filter: blur(12px); }
     .eyebrow { margin: 0; padding: 28px 32px 0; color: #ff78c8; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 11px; }
     h1 { margin: 10px 32px 0; font-size: clamp(32px, 6vw, 60px); line-height: 1; letter-spacing: -.055em; }
     .subtitle { max-width: 600px; margin: 16px 32px 28px; color: var(--muted); font-size: 16px; }
-    .visual { position: fixed; inset: 0; z-index: 1; overflow: hidden; border: 0; border-radius: 0; background: radial-gradient(circle at 18% 20%, rgba(255, 70, 181, .2), transparent 30%), radial-gradient(circle at 83% 75%, rgba(66, 101, 255, .24), transparent 36%), linear-gradient(145deg, rgba(47, 26, 87, .7), rgba(9, 7, 25, .94)); box-shadow: 0 24px 80px rgba(119, 46, 255, .2), 0 0 0 1px rgba(255, 113, 213, .08) inset; }
+    .visual { position: fixed; inset: 0; z-index: 1; overflow: hidden; border: 0; border-radius: 0; background: #000; box-shadow: 0 24px 80px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .04) inset; }
     canvas { width: 100%; height: 100%; display: block; }
     .visual::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(transparent 49.8%, rgba(255,255,255,.07) 50%, transparent 50.2%); background-size: 100% 34px; mix-blend-mode: screen; }
     .cartoon-window { position: absolute; top: 18px; left: 18px; z-index: 2; width: min(250px, 42%); min-width: 150px; max-width: 70%; overflow: hidden; resize: both; border: 1px solid rgba(255, 255, 255, .28); border-radius: 14px; background: #0d0a1b; box-shadow: 0 12px 34px rgba(0, 0, 0, .45), 0 0 24px rgba(255, 92, 203, .2); }
@@ -44,23 +47,33 @@
     .cartoon-bar button { padding: 4px 7px; border-radius: 7px; font-size: 11px; }
     .status { position: absolute; top: 18px; left: 20px; display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
-    .controls { display: none; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; position: fixed; right: 24px; bottom: 58px; left: 24px; z-index: 4; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); backdrop-filter: blur(16px); }
+    .controls { display: none; grid-template-columns: minmax(220px, 1fr) auto auto; gap: 12px; align-items: center; position: fixed; right: 24px; bottom: 208px; left: 24px; z-index: 4; margin: 0; padding: 18px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 18px 18px 12px 12px; background: rgba(8, 9, 18, .94); box-shadow: 0 18px 46px rgba(0, 0, 0, .4); backdrop-filter: blur(20px); }
+    .control-tabs { display: flex; grid-column: 1 / -1; gap: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+    .control-tab { flex: 1; padding: 8px 10px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: 12px; }
+    .control-tab:hover { color: var(--text); background: rgba(255, 255, 255, .06); transform: none; }
+    .control-tab.active { color: #081414; background: var(--accent); }
+    [data-panel].is-hidden { display: none !important; }
     .track { min-width: 0; }
     .track-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
     .track-meta { margin-top: 3px; color: var(--muted); font-size: 12px; }
-    .link-form { display: flex; min-width: 260px; gap: 7px; }
-    .link-form input { min-width: 0; width: 220px; border: 1px solid rgba(255,255,255,.15); border-radius: 11px; padding: 11px 12px; color: var(--text); font: inherit; background: rgba(255,255,255,.07); }
+    .link-form { display: flex; min-width: 0; grid-column: 1 / -1; gap: 8px; padding-top: 2px; }
+    .link-form input { min-width: 0; flex: 1; border: 1px solid rgba(255,255,255,.15); border-radius: 10px; padding: 11px 12px; color: var(--text); font: inherit; background: #111321; }
     .link-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     button, .file-label { border: 1px solid rgba(255,255,255,.15); border-radius: 11px; padding: 11px 15px; color: var(--text); font: inherit; font-weight: 700; cursor: pointer; background: rgba(255,255,255,.07); transition: .2s ease; }
     button:hover, .file-label:hover { border-color: var(--accent); transform: translateY(-1px); }
-    button.primary { border: 0; color: #10081d; background: linear-gradient(135deg, #70f7d5, #ffe169 48%, #ff78c8); }
+    button.primary { border-color: rgba(112, 247, 213, .45); color: #bafbed; background: #102a2b; }
+    button.primary:hover { border-color: var(--accent); background: #153a3a; }
+    input, button, .file-label { color-scheme: dark; }
     input[type=file] { display: none; }
-    .options { display: none; flex-wrap: wrap; gap: 10px; position: fixed; right: 24px; bottom: 14px; left: 24px; z-index: 4; margin: 0; color: var(--muted); font-size: 13px; }
+    .options { display: none; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 8px; position: fixed; right: 24px; bottom: 18px; left: 24px; z-index: 4; margin: 0; padding: 10px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 12px 12px 18px 18px; color: var(--muted); font-size: 12px; background: rgba(8, 9, 18, .94); box-shadow: 0 18px 46px rgba(0, 0, 0, .4); backdrop-filter: blur(20px); }
     body.ui-open .controls { display: grid; }
-    body.ui-open .options { display: flex; }
-    .options label { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.035); }
-    input[type=range] { width: 130px; accent-color: var(--accent); }
-    @media (max-width: 650px) { .controls { grid-template-columns: 1fr 1fr; } .track { grid-column: 1 / -1; } button, .file-label { text-align: center; } }
+    body.ui-open .options { display: grid; }
+    .options label { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 9px; background: #0d0f1b; }
+    input[type=range] { width: 100%; accent-color: var(--accent); }
+    select { width: 100%; border: 1px solid rgba(255, 255, 255, .15); border-radius: 8px; padding: 7px 8px; color: var(--text); font: inherit; background: #111321; color-scheme: dark; }
+    select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    @media (max-width: 900px) { .options { grid-template-columns: repeat(3, minmax(120px, 1fr)); } }
+    @media (max-width: 650px) { .controls { right: 12px; bottom: 370px; left: 12px; grid-template-columns: 1fr 1fr; } .options { right: 12px; bottom: 12px; left: 12px; grid-template-columns: 1fr 1fr; } .track { grid-column: 1 / -1; } .link-form { grid-column: 1 / -1; } button, .file-label { text-align: center; } }
   </style>
 </head>
 <body>
@@ -84,13 +97,18 @@
       </div>
     </section>
     <section class="controls">
-      <div class="track">
+      <nav class="control-tabs" aria-label="Control sections">
+        <button class="control-tab active" type="button" data-tab="audio">Audio</button>
+        <button class="control-tab" type="button" data-tab="visuals">Visuals</button>
+        <button class="control-tab" type="button" data-tab="video">Video</button>
+      </nav>
+      <div class="track" data-panel="audio">
         <div class="track-title" id="trackTitle">No source selected</div>
         <div class="track-meta" id="trackMeta">Choose a file or capture a browser tab</div>
       </div>
-      <label class="file-label" for="fileInput">Choose file</label>
-      <button class="primary" id="captureButton">Capture tab audio</button>
-      <form class="link-form" id="linkForm">
+      <label class="file-label" for="fileInput" data-panel="audio">Choose file</label>
+      <button class="primary" id="captureButton" data-panel="audio">Capture tab audio</button>
+      <form class="link-form" id="linkForm" data-panel="video">
         <input id="videoUrl" type="url" placeholder="Paste YouTube link" aria-label="YouTube video link">
         <button type="submit">Load video</button>
       </form>
@@ -98,10 +116,26 @@
       <audio id="player" controls preload="metadata" hidden></audio>
     </section>
     <div class="options">
-      <label>Glow <input id="glow" type="range" min="0" max="30" value="12"></label>
-      <label>Bars <input id="bars" type="range" min="32" max="180" value="96"></label>
-      <button id="pauseButton">Pause animation</button>
-      <button id="showCartoon" type="button" hidden>Show video window</button>
+      <label data-panel="visuals">Glow <input id="glow" type="range" min="0" max="30" value="12"></label>
+      <label data-panel="visuals">Bars <input id="bars" type="range" min="32" max="180" value="96"></label>
+      <label data-panel="visuals">Height <input id="heightScale" type="range" min="50" max="100" value="82"></label>
+      <label data-panel="visuals">Color speed <input id="colorSpeed" type="range" min="0" max="60" value="18"></label>
+      <label data-panel="visuals">Frequency <input id="frequencyRange" type="range" min="8" max="30" step=".05" value="17.85"></label>
+      <label data-panel="visuals">Bar colors
+        <select id="colorPreset" aria-label="Bar color preset">
+          <option value="rainbow">Rainbow</option>
+          <option value="neon">Neon</option>
+          <option value="ocean">Ocean</option>
+          <option value="sunset">Sunset</option>
+          <option value="forest">Forest</option>
+          <option value="mono">Monochrome</option>
+        </select>
+      </label>
+      <button id="pauseButton" data-panel="visuals">Pause animation</button>
+      <button id="showCartoon" data-panel="video" type="button" hidden>Show video window</button>
+      <button id="copyToggle" data-panel="visuals" type="button">Show title</button>
+      <button id="resetCartoon" data-panel="video" type="button">Reset video layout</button>
+      <button id="fullscreenButton" data-panel="video" type="button">Fullscreen</button>
     </div>
   </main>
   <script>
@@ -117,6 +151,10 @@
     const meta = document.getElementById("trackMeta");
     const glow = document.getElementById("glow");
     const bars = document.getElementById("bars");
+    const heightScale = document.getElementById("heightScale");
+    const colorSpeed = document.getElementById("colorSpeed");
+    const frequencyRange = document.getElementById("frequencyRange");
+    const colorPreset = document.getElementById("colorPreset");
     const uiToggle = document.getElementById("uiToggle");
     const cartoonWindow = document.querySelector(".cartoon-window");
     const cartoonBar = document.querySelector(".cartoon-bar");
@@ -125,6 +163,9 @@
     const videoUrl = document.getElementById("videoUrl");
     const closeCartoon = document.getElementById("closeCartoon");
     const showCartoon = document.getElementById("showCartoon");
+    const copyToggle = document.getElementById("copyToggle");
+    const resetCartoon = document.getElementById("resetCartoon");
+    const fullscreenButton = document.getElementById("fullscreenButton");
     let audioContext;
     let analyser;
     let source;
@@ -137,6 +178,14 @@
       document.body.classList.toggle("ui-open");
       uiToggle.textContent = document.body.classList.contains("ui-open") ? "Hide controls" : "Show controls";
     });
+    document.querySelectorAll(".control-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        const panel = tab.dataset.tab;
+        document.querySelectorAll(".control-tab").forEach(item => item.classList.toggle("active", item === tab));
+        document.querySelectorAll("[data-panel]").forEach(item => item.classList.toggle("is-hidden", item.dataset.panel !== panel));
+      });
+    });
+    document.querySelector(".control-tab.active").click();
 
     function resize() {
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -209,6 +258,27 @@
       cartoonWindow.hidden = false;
       showCartoon.hidden = true;
     });
+    copyToggle.addEventListener("click", () => {
+      const visible = document.body.classList.toggle("show-copy");
+      copyToggle.textContent = visible ? "Hide title" : "Show title";
+    });
+    resetCartoon.addEventListener("click", () => {
+      cartoonWindow.hidden = false;
+      showCartoon.hidden = true;
+      cartoonWindow.style.width = "";
+      cartoonWindow.style.height = "";
+      cartoonWindow.style.left = "18px";
+      cartoonWindow.style.top = "18px";
+      cartoonWindow.style.right = "auto";
+      cartoonWindow.style.bottom = "auto";
+    });
+    fullscreenButton.addEventListener("click", async () => {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    });
+    document.addEventListener("fullscreenchange", () => {
+      fullscreenButton.textContent = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+    });
     linkForm.addEventListener("submit", event => {
       event.preventDefault();
       let videoId = null;
@@ -264,10 +334,10 @@
       const width = canvas.clientWidth, height = canvas.clientHeight;
       ctx.clearRect(0, 0, width, height);
       const time = performance.now() / 1000;
-      const hue = (time * 18) % 360;
+      const hue = (time * Number(colorSpeed.value)) % 360;
       const ambient = ctx.createRadialGradient(width * .5, height * .82, 0, width * .5, height * .82, height * .9);
-      ambient.addColorStop(0, `hsla(${hue}, 100%, 65%, .16)`);
-      ambient.addColorStop(.55, `hsla(${(hue + 90) % 360}, 100%, 60%, .06)`);
+      ambient.addColorStop(0, "rgba(255, 255, 255, .025)");
+      ambient.addColorStop(.55, "rgba(255, 255, 255, .008)");
       ambient.addColorStop(1, "transparent");
       ctx.fillStyle = ambient;
       ctx.fillRect(0, 0, width, height);
@@ -289,17 +359,25 @@
         const pairCount = Math.ceil(count / 2);
         const pairIndex = Math.floor(i / 2);
         const position = pairIndex / Math.max(1, pairCount - 1);
-        const frequencyIndex = Math.min(data.length - 1, Math.floor(Math.pow(position, 1.35) * data.length * .1785));
+        const frequencyIndex = Math.min(data.length - 1, Math.floor(Math.pow(position, 1.35) * data.length * (Number(frequencyRange.value) / 100)));
         const neighbor = data[Math.min(data.length - 1, frequencyIndex + 2)];
         const rawValue = (data[frequencyIndex] * .7 + neighbor * .3) / 255;
         // Use restrained compression so loud tracks keep visible height variation.
         const boostedValue = Math.pow(rawValue, .9) * .78 * (1 + position * .35);
         const value = Math.min(.95, Math.max(.025, boostedValue));
-        const barHeight = Math.max(4, value * height * .82);
+        const barHeight = Math.max(4, value * height * (Number(heightScale.value) / 100));
         const x = Math.min(width - barWidth, i * (barWidth + gap));
-        const barHue = (hue + i * 2.8) % 360;
-        ctx.shadowColor = `hsl(${barHue}, 100%, 65%)`;
-        ctx.fillStyle = `hsl(${barHue}, 100%, ${58 + value * 22}%)`;
+        const palette = {
+          rainbow: [hue + i * 2.8, 100, 58 + value * 22],
+          neon: [300 + i * 1.8, 100, 62 + value * 18],
+          ocean: [185 + i * 1.2, 88, 52 + value * 24],
+          sunset: [12 + i * 1.15, 100, 58 + value * 22],
+          forest: [105 + i * .85, 72, 42 + value * 26],
+          mono: [190, 18, 72 + value * 20]
+        };
+        const [barHue, saturation, lightness] = palette[colorPreset.value] || palette.rainbow;
+        ctx.shadowColor = `hsl(${barHue}, ${saturation}%, 65%)`;
+        ctx.fillStyle = `hsl(${barHue}, ${saturation}%, ${lightness}%)`;
         ctx.fillRect(x, height - barHeight - 22, barWidth, barHeight);
       }
       const waveGradient = ctx.createLinearGradient(0, 0, width, 0);
@@ -318,11 +396,11 @@
         const pairCount = Math.ceil(count / 2);
         const pairIndex = Math.floor(barIndex / 2);
         const position = pairIndex / Math.max(1, pairCount - 1);
-        const frequencyIndex = Math.min(data.length - 1, Math.floor(Math.pow(position, 1.35) * data.length * .1785));
+        const frequencyIndex = Math.min(data.length - 1, Math.floor(Math.pow(position, 1.35) * data.length * (Number(frequencyRange.value) / 100)));
         const neighbor = data[Math.min(data.length - 1, frequencyIndex + 2)];
         const rawValue = (data[frequencyIndex] * .7 + neighbor * .3) / 255;
         const barValue = Math.min(.95, Math.max(.025, Math.pow(rawValue, .9) * .78 * (1 + position * .35)));
-        const barTop = height - Math.max(4, barValue * height * .82) - 22;
+        const barTop = height - Math.max(4, barValue * height * (Number(heightScale.value) / 100)) - 22;
         const y = barTop - 3 + (waveform[i] - 128) / 128 * 5;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);

@@ -13,4 +13,5 @@ full-page spectrum visualizer. The small muted YouTube window can be dragged and
 
 1. Open the launch link above.
 2. Choose an audio file, or click **Capture tab audio** and share a tab with audio enabled.
-3. Adjust the glow and bar controls as desired.
+3. Adjust glow, bar count, bar height, color speed, and frequency range as desired.
+4. Open **Show controls** and use the **Audio**, **Visuals**, and **Video** tabs to keep the customization options organized.
