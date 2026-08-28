@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#080912">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23080912'/%3E%3Cpath d='M10 38h8V26h8v24h8V14h8v36h8V22h8v16h-8v12H34V20h-8v36h-8V42h-8z' fill='%2370f7d5'/%3E%3C/svg%3E">
+  <link rel="manifest" href="manifest.json">
   <title>Source Visualizer</title>
   <style>
     :root {
@@ -59,6 +61,8 @@
     .link-form { display: flex; min-width: 0; grid-column: 1 / -1; gap: 8px; padding-top: 2px; }
     .link-form input { min-width: 0; flex: 1; border: 1px solid rgba(255,255,255,.15); border-radius: 10px; padding: 11px 12px; color: var(--text); font: inherit; background: #111321; }
     .link-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .audio-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .volume-control { display: grid; grid-template-columns: auto minmax(100px, 1fr); align-items: center; gap: 8px; min-width: 150px; }
     button, .file-label { border: 1px solid rgba(255,255,255,.15); border-radius: 11px; padding: 11px 15px; color: var(--text); font: inherit; font-weight: 700; cursor: pointer; background: rgba(255,255,255,.07); transition: .2s ease; }
     button:hover, .file-label:hover { border-color: var(--accent); transform: translateY(-1px); }
     button.primary { border-color: rgba(112, 247, 213, .45); color: #bafbed; background: #102a2b; }
@@ -86,9 +90,9 @@
       <canvas id="visualizer"></canvas>
       <div class="status"><span class="dot" id="statusDot"></span><span id="status">Ready for an audio source</span></div>
       <div class="cartoon-window">
-        <iframe id="cartoon" title="Muted YouTube video" src="https://www.youtube.com/embed/zSJRUojx3dE?autoplay=1&mute=1&loop=1&playlist=zSJRUojx3dE&controls=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        <iframe id="cartoon" title="YouTube video" src="about:blank" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
         <div class="cartoon-bar">
-          <span id="cartoonLabel">Drag corner to resize</span>
+          <span id="cartoonLabel">No video loaded · drag corner to resize</span>
           <div>
             <button id="closeCartoon" type="button">Close</button>
           </div>
@@ -106,7 +110,13 @@
         <div class="track-meta" id="trackMeta">Choose a file or capture a browser tab</div>
       </div>
       <label class="file-label" for="fileInput" data-panel="audio">Choose file</label>
-      <button class="primary" id="captureButton" data-panel="audio">Capture tab audio</button>
+      <button class="primary" id="captureButton" data-panel="audio">Capture browser tab audio</button>
+      <div class="audio-actions" data-panel="audio">
+        <button id="muteButton" type="button">Mute</button>
+        <button id="stopSource" type="button">Stop source</button>
+        <button id="clearSource" type="button">Clear source</button>
+      </div>
+      <label class="volume-control" data-panel="audio">Volume <input id="volume" type="range" min="0" max="100" value="100"></label>
       <form class="link-form" id="linkForm" data-panel="video">
         <input id="videoUrl" type="url" placeholder="Paste YouTube link" aria-label="YouTube video link">
         <button type="submit">Load video</button>
@@ -136,6 +146,15 @@
           <option value="mono">Monochrome</option>
         </select>
       </label>
+      <label data-panel="visuals">Background
+        <select id="backgroundPreset" aria-label="Visualizer background">
+          <option value="black">Black</option>
+          <option value="midnight">Midnight</option>
+          <option value="plum">Plum</option>
+        </select>
+      </label>
+      <label data-panel="visuals">Waveform opacity <input id="waveOpacity" type="range" min="0" max="100" value="100"></label>
+      <label data-panel="visuals">Waveform thickness <input id="waveThickness" type="range" min="1" max="8" value="2"></label>
       <button id="randomizeFrequencies" data-panel="visuals" type="button">Randomize frequency map</button>
       <button id="pauseButton" data-panel="visuals">Pause animation</button>
       <button id="showCartoon" data-panel="video" type="button" hidden>Show video window</button>
@@ -174,6 +193,13 @@
     const copyToggle = document.getElementById("copyToggle");
     const resetCartoon = document.getElementById("resetCartoon");
     const fullscreenButton = document.getElementById("fullscreenButton");
+    const muteButton = document.getElementById("muteButton");
+    const stopSourceButton = document.getElementById("stopSource");
+    const clearSourceButton = document.getElementById("clearSource");
+    const volume = document.getElementById("volume");
+    const backgroundPreset = document.getElementById("backgroundPreset");
+    const waveOpacity = document.getElementById("waveOpacity");
+    const waveThickness = document.getElementById("waveThickness");
     let audioContext;
     let analyser;
     let source;
@@ -184,6 +210,8 @@
     let dragState;
     let frequencyMap = [];
     let frequencyMapSize = 0;
+    let frequencyData;
+    let waveformData;
     function shuffleFrequencyMap(pairCount) {
       frequencyMap = Array.from({ length: pairCount }, (_, index) => index);
       for (let i = frequencyMap.length - 1; i > 0; i--) {
@@ -232,11 +260,42 @@
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     }
     function setupAnalyser() {
-      if (!audioContext) audioContext = new AudioContext();
+      if (!audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) throw new Error("Web Audio is not supported in this browser.");
+        audioContext = new AudioContextClass();
+      }
       if (!analyser) {
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = .82;
+        frequencyData = new Uint8Array(analyser.frequencyBinCount);
+        waveformData = new Uint8Array(analyser.fftSize);
+      }
+    }
+    function cleanupStream() {
+      if (source) {
+        source.disconnect();
+        source = null;
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+    }
+    function stopCurrentSource(clear = false) {
+      cleanupStream();
+      if (player) player.pause();
+      captureButton.textContent = "Capture browser tab audio";
+      if (clear) {
+        player.removeAttribute("src");
+        player.load();
+        title.textContent = "No source selected";
+        meta.textContent = "Choose a file or capture a browser tab";
+        captureButton.textContent = "Capture browser tab audio";
+        setStatus("Ready for an audio source");
+      } else {
+        setStatus("Source stopped", false);
       }
     }
     function connect(node) {
@@ -267,21 +326,62 @@
       player.hidden = false;
       player.play().catch(() => setStatus("Press play to start the source"));
     });
+    volume.addEventListener("input", () => { player.volume = Number(volume.value) / 100; });
+    muteButton.addEventListener("click", () => {
+      player.muted = !player.muted;
+      muteButton.textContent = player.muted ? "Unmute" : "Mute";
+    });
+    stopSourceButton.addEventListener("click", () => stopCurrentSource());
+    clearSourceButton.addEventListener("click", () => stopCurrentSource(true));
+    backgroundPreset.addEventListener("change", () => {
+      const colors = { black: "#000", midnight: "#080d22", plum: "#18091d" };
+      document.querySelector(".visual").style.background = colors[backgroundPreset.value];
+    });
     captureButton.addEventListener("click", async () => {
       try {
-        if (!navigator.mediaDevices?.getDisplayMedia) throw new Error("Tab capture is not supported in this browser.");
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        if (!stream.getAudioTracks().length) throw new Error("No audio track was shared. Enable the tab audio checkbox and try again.");
+        if (!navigator.mediaDevices?.getDisplayMedia) throw new Error("Browser tab capture is not supported in this browser.");
+        cleanupStream();
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "browser" }, audio: true });
+        const displaySurface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
+        if (displaySurface && displaySurface !== "browser") {
+          stream.getTracks().forEach(track => track.stop());
+          stream = null;
+          throw new Error("Only browser-tab capture is enabled. Choose a browser tab, not a window or screen.");
+        }
+        const audioTrack = stream.getAudioTracks()[0];
+        if (!audioTrack) {
+          stream.getTracks().forEach(track => track.stop());
+          stream = null;
+          throw new Error("No tab audio was shared. Choose a browser tab and enable Share tab audio.");
+        }
+        audioTrack.enabled = true;
         setupAnalyser();
         connect(audioContext.createMediaStreamSource(stream));
-        stream.getVideoTracks().forEach(track => track.stop());
-        stream.getAudioTracks()[0].addEventListener("ended", () => setStatus("Capture ended", false));
+        await audioContext.resume();
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const testData = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(testData);
+        const peak = Math.max(...testData);
+        if (peak === 0) {
+          cleanupStream();
+          throw new Error("The shared tab stream is silent. Start the tab audio and enable Share tab audio.");
+        }
+        audioTrack.addEventListener("ended", () => {
+          cleanupStream();
+          captureButton.textContent = "Capture browser tab audio";
+          setStatus("Capture ended. Start a new capture to reconnect.", false);
+        });
         title.textContent = "Live browser source";
-        meta.textContent = "Streaming directly from the shared tab or window";
+        meta.textContent = "Streaming directly from the shared browser tab";
         setStatus("Listening to live source");
         captureButton.textContent = "Capture again";
       } catch (error) {
-        setStatus(error.message || "Unable to capture this source", false);
+        if (stream && error.name !== "NotAllowedError") cleanupStream();
+        if (error.name === "NotAllowedError") {
+          setStatus("Capture canceled or blocked. Choose a browser tab and enable tab audio.", false);
+        } else {
+          setStatus(error.message || "Unable to capture this source", false);
+        }
       }
     });
     pauseButton.addEventListener("click", () => {
@@ -383,10 +483,8 @@
         ctx.fillRect(0, height * .5 - 1, width, 2);
         return;
       }
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const waveform = new Uint8Array(analyser.fftSize);
-      analyser.getByteFrequencyData(data);
-      analyser.getByteTimeDomainData(waveform);
+      analyser.getByteFrequencyData(frequencyData);
+      analyser.getByteTimeDomainData(waveformData);
       if (visualShape.value === "sphere") {
         const centerX = width / 2;
         const centerY = height / 2;
@@ -396,7 +494,7 @@
         const outerPoints = [];
         for (let i = 0; i < count; i++) {
           const pairIndex = Math.floor(i / 2);
-          const value = softenedAudioValue(pairIndex, pairCount, data);
+          const value = softenedAudioValue(pairIndex, pairCount, frequencyData);
           const angle = i / count * Math.PI * 2 - Math.PI / 2;
           const waveRadius = radius + Math.max(3, value * maxBarHeight);
           outerPoints.push([centerX + Math.cos(angle) * waveRadius, centerY + Math.sin(angle) * waveRadius]);
@@ -449,7 +547,7 @@
         // Keep all bars in the musical range; the highest FFT bins are usually silent.
         const pairCount = Math.ceil(count / 2);
         const pairIndex = Math.floor(i / 2);
-        const value = softenedAudioValue(pairIndex, pairCount, data);
+        const value = softenedAudioValue(pairIndex, pairCount, frequencyData);
         const barHeight = Math.max(4, value * height * (Number(heightScale.value) / 100));
         const x = Math.min(width - barWidth, i * (barWidth + gap));
         const palette = {
@@ -486,23 +584,28 @@
       ctx.shadowBlur = Number(glow.value) * .7;
       ctx.shadowColor = "#ff78c8";
       ctx.strokeStyle = waveGradient;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = Number(waveThickness.value);
       ctx.beginPath();
-      for (let i = 0; i < waveform.length; i += 4) {
-        const x = i / (waveform.length - 1) * width;
+      ctx.globalAlpha = Number(waveOpacity.value) / 100;
+      for (let i = 0; i < waveformData.length; i += 4) {
+        const x = i / (waveformData.length - 1) * width;
         const barIndex = Math.min(count - 1, Math.floor(x / width * count));
         const pairCount = Math.ceil(count / 2);
         const pairIndex = Math.floor(barIndex / 2);
-        const barValue = softenedAudioValue(pairIndex, pairCount, data);
+        const barValue = softenedAudioValue(pairIndex, pairCount, frequencyData);
         const barTop = height - Math.max(4, barValue * height * (Number(heightScale.value) / 100)) - 22;
-        const y = barTop - 3 + (waveform[i] - 128) / 128 * 5;
+        const y = barTop - 3 + (waveformData[i] - 128) / 128 * 5;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
+      ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
     }
     window.addEventListener("resize", resize);
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      navigator.serviceWorker.register("sw.js").catch(error => console.warn("Offline support unavailable:", error));
+    }
     resize();
     draw();
   </script>
