@@ -90,7 +90,6 @@
         <div class="cartoon-bar">
           <span id="cartoonLabel">Drag corner to resize</span>
           <div>
-            <a class="file-label" href="https://www.youtube.com/watch?v=zSJRUojx3dE" target="_blank" rel="noopener">Open on YouTube</a>
             <button id="closeCartoon" type="button">Close</button>
           </div>
         </div>
@@ -334,9 +333,7 @@
         return;
       }
       cartoonFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=1&rel=0`;
-      const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
       cartoonFrame.title = "Muted YouTube video";
-      document.querySelector(".cartoon-bar a").href = watchUrl;
       document.getElementById("cartoonLabel").textContent = "Muted YouTube video";
       setStatus("Video window updated");
     });
