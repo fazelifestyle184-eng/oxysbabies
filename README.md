@@ -9,6 +9,12 @@
 The app analyzes audio from a local file or a browser tab and displays a colorful,
 full-page spectrum visualizer. The small muted YouTube window can be dragged and resized.
 
+## Lively Wallpaper
+
+**[Download the Lively Wallpaper package](./Source%20Visualizer%20Lively%20Wallpaper%20-%20smooth.zip)**
+
+> This ZIP is for **Lively Wallpaper** on Windows. Import it into Lively Wallpaper as a web audio wallpaper.
+
 ## Use it
 
 1. Open the launch link above.
