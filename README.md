@@ -14,4 +14,4 @@ full-page spectrum visualizer. The small muted YouTube window can be dragged and
 1. Open the launch link above.
 2. Choose an audio file, or click **Capture tab audio** and share a tab with audio enabled.
 3. Adjust glow, bar count, bar height, color speed, and frequency range as desired.
-4. Open **Show controls** and use the **Audio**, **Visuals**, and **Video** tabs to keep the customization options organized.
+4. Open **Show controls** and use the **Audio**, **Visuals**, and **Video** tabs to keep the customization options organized. The Visuals tab includes a sphere-shaped bar mode and a frequency-map randomizer.

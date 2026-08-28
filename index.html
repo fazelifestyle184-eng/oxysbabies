@@ -121,6 +121,12 @@
       <label data-panel="visuals">Height <input id="heightScale" type="range" min="50" max="100" value="82"></label>
       <label data-panel="visuals">Color speed <input id="colorSpeed" type="range" min="0" max="60" value="18"></label>
       <label data-panel="visuals">Frequency <input id="frequencyRange" type="range" min="8" max="30" step=".05" value="17.85"></label>
+      <label data-panel="visuals">Shape
+        <select id="visualShape" aria-label="Visualizer shape">
+          <option value="bars">Bars</option>
+          <option value="sphere">Sphere</option>
+        </select>
+      </label>
       <label data-panel="visuals">Bar colors
         <select id="colorPreset" aria-label="Bar color preset">
           <option value="rainbow">Rainbow</option>
@@ -131,6 +137,7 @@
           <option value="mono">Monochrome</option>
         </select>
       </label>
+      <button id="randomizeFrequencies" data-panel="visuals" type="button">Randomize frequency map</button>
       <button id="pauseButton" data-panel="visuals">Pause animation</button>
       <button id="showCartoon" data-panel="video" type="button" hidden>Show video window</button>
       <button id="copyToggle" data-panel="visuals" type="button">Show title</button>
@@ -154,7 +161,9 @@
     const heightScale = document.getElementById("heightScale");
     const colorSpeed = document.getElementById("colorSpeed");
     const frequencyRange = document.getElementById("frequencyRange");
+    const visualShape = document.getElementById("visualShape");
     const colorPreset = document.getElementById("colorPreset");
+    const randomizeFrequencies = document.getElementById("randomizeFrequencies");
     const uiToggle = document.getElementById("uiToggle");
     const cartoonWindow = document.querySelector(".cartoon-window");
     const cartoonBar = document.querySelector(".cartoon-bar");
@@ -174,6 +183,33 @@
     let animationPaused = false;
     let objectUrl;
     let dragState;
+    let frequencyMap = [];
+    let frequencyMapSize = 0;
+    function shuffleFrequencyMap(pairCount) {
+      frequencyMap = Array.from({ length: pairCount }, (_, index) => index);
+      for (let i = frequencyMap.length - 1; i > 0; i--) {
+        const swapIndex = Math.floor(Math.random() * (i + 1));
+        [frequencyMap[i], frequencyMap[swapIndex]] = [frequencyMap[swapIndex], frequencyMap[i]];
+      }
+      frequencyMapSize = pairCount;
+    }
+    function frequencyIndexFor(pairIndex, pairCount, dataLength) {
+      if (frequencyMapSize !== pairCount) shuffleFrequencyMap(pairCount);
+      const mappedPosition = frequencyMap[pairIndex] / Math.max(1, pairCount - 1);
+      return Math.min(dataLength - 1, Math.floor(Math.pow(mappedPosition, 1.35) * dataLength * (Number(frequencyRange.value) / 100)));
+    }
+    function audioValueFor(pairIndex, pairCount, data) {
+      const safePair = Math.max(0, Math.min(pairCount - 1, pairIndex));
+      const frequencyIndex = frequencyIndexFor(safePair, pairCount, data.length);
+      const neighbor = data[Math.min(data.length - 1, frequencyIndex + 2)];
+      const rawValue = (data[frequencyIndex] * .7 + neighbor * .3) / 255;
+      return Math.min(.95, Math.max(.025, Math.pow(rawValue, .9) * .78 * (1 + safePair / Math.max(1, pairCount - 1) * .35)));
+    }
+    function softenedAudioValue(pairIndex, pairCount, data) {
+      const value = audioValueFor(pairIndex, pairCount, data);
+      const neighborAverage = (audioValueFor(pairIndex - 1, pairCount, data) + audioValueFor(pairIndex + 1, pairCount, data)) / 2;
+      return neighborAverage + (value - neighborAverage) * .45;
+    }
     uiToggle.addEventListener("click", () => {
       document.body.classList.toggle("ui-open");
       uiToggle.textContent = document.body.classList.contains("ui-open") ? "Hide controls" : "Show controls";
@@ -186,6 +222,9 @@
       });
     });
     document.querySelector(".control-tab.active").click();
+    randomizeFrequencies.addEventListener("click", () => {
+      shuffleFrequencyMap(Math.ceil(Number(bars.value) / 2));
+    });
 
     function resize() {
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -351,24 +390,73 @@
       const waveform = new Uint8Array(analyser.fftSize);
       analyser.getByteFrequencyData(data);
       analyser.getByteTimeDomainData(waveform);
+      if (visualShape.value === "sphere") {
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = Math.min(width, height) * .22;
+        const maxBarHeight = Math.min(width, height) * .28 * (Number(heightScale.value) / 82);
+        const pairCount = Math.ceil(count / 2);
+        const outerPoints = [];
+        for (let i = 0; i < count; i++) {
+          const pairIndex = Math.floor(i / 2);
+          const value = softenedAudioValue(pairIndex, pairCount, data);
+          const angle = i / count * Math.PI * 2 - Math.PI / 2;
+          const waveRadius = radius + Math.max(3, value * maxBarHeight);
+          outerPoints.push([centerX + Math.cos(angle) * waveRadius, centerY + Math.sin(angle) * waveRadius]);
+        }
+        const gradients = {
+          neon: ["#ff4fd8", "#a96bff", "#47f0ff", "#ff4fd8"],
+          ocean: ["#45f0e0", "#3ca8ff", "#536dff", "#45f0e0"],
+          sunset: ["#ffed69", "#ff9b54", "#ff5f7e", "#ffed69"],
+          forest: ["#c5f36b", "#56dc9b", "#2c9e8f", "#c5f36b"],
+          mono: ["#d9e2f2", "#8090aa", "#f4f7ff", "#d9e2f2"]
+        };
+        let ringGradient;
+        let glowColor;
+        if (colorPreset.value === "rainbow") {
+          ringGradient = ctx.createConicGradient(-Math.PI / 2, centerX, centerY);
+          for (let index = 0; index <= 12; index++) {
+            ringGradient.addColorStop(index / 12, `hsl(${(hue + index * 30) % 360}, 100%, 65%)`);
+          }
+          glowColor = `hsl(${(hue + 180) % 360}, 100%, 65%)`;
+        } else {
+          const colors = gradients[colorPreset.value] || gradients.neon;
+          ringGradient = ctx.createLinearGradient(0, 0, width, height);
+          colors.forEach((color, index) => ringGradient.addColorStop(index / (colors.length - 1), color));
+          glowColor = colors[2];
+        }
+        ctx.shadowColor = glowColor;
+        ctx.fillStyle = ringGradient;
+        ctx.beginPath();
+        const firstPoint = outerPoints[0];
+        const lastPoint = outerPoints[outerPoints.length - 1];
+        const firstMidX = (firstPoint[0] + lastPoint[0]) / 2;
+        const firstMidY = (firstPoint[1] + lastPoint[1]) / 2;
+        ctx.moveTo(firstMidX, firstMidY);
+        outerPoints.forEach(([x, y], index) => {
+          const next = outerPoints[(index + 1) % outerPoints.length];
+          ctx.quadraticCurveTo(x, y, (x + next[0]) / 2, (y + next[1]) / 2);
+        });
+        ctx.lineTo(centerX + Math.cos(-Math.PI / 2) * radius, centerY + Math.sin(-Math.PI / 2) * radius);
+        ctx.arc(centerX, centerY, radius, -Math.PI / 2, Math.PI * 1.5, true);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        return;
+      }
       const gap = Math.min(3, width / count);
       const barWidth = Math.max(1, (width - gap * (count - 1)) / count);
+      const barSegments = [];
       ctx.shadowBlur = Number(glow.value);
       for (let i = 0; i < count; i++) {
         // Keep all bars in the musical range; the highest FFT bins are usually silent.
         const pairCount = Math.ceil(count / 2);
         const pairIndex = Math.floor(i / 2);
-        const position = pairIndex / Math.max(1, pairCount - 1);
-        const frequencyIndex = Math.min(data.length - 1, Math.floor(Math.pow(position, 1.35) * data.length * (Number(frequencyRange.value) / 100)));
-        const neighbor = data[Math.min(data.length - 1, frequencyIndex + 2)];
-        const rawValue = (data[frequencyIndex] * .7 + neighbor * .3) / 255;
-        // Use restrained compression so loud tracks keep visible height variation.
-        const boostedValue = Math.pow(rawValue, .9) * .78 * (1 + position * .35);
-        const value = Math.min(.95, Math.max(.025, boostedValue));
+        const value = softenedAudioValue(pairIndex, pairCount, data);
         const barHeight = Math.max(4, value * height * (Number(heightScale.value) / 100));
         const x = Math.min(width - barWidth, i * (barWidth + gap));
         const palette = {
-          rainbow: [hue + i * 2.8, 100, 58 + value * 22],
+          rainbow: [hue + i * 4.4, 100, 58 + value * 22],
           neon: [300 + i * 1.8, 100, 62 + value * 18],
           ocean: [185 + i * 1.2, 88, 52 + value * 24],
           sunset: [12 + i * 1.15, 100, 58 + value * 22],
@@ -379,6 +467,19 @@
         ctx.shadowColor = `hsl(${barHue}, ${saturation}%, 65%)`;
         ctx.fillStyle = `hsl(${barHue}, ${saturation}%, ${lightness}%)`;
         ctx.fillRect(x, height - barHeight - 22, barWidth, barHeight);
+        barSegments.push({ x, barHeight, barHue, saturation, lightness });
+      }
+      if (gap > 0 && barSegments.length > 1) {
+        for (let i = 0; i < barSegments.length - 1; i++) {
+          const current = barSegments[i];
+          const next = barSegments[i + 1];
+          const blendHeight = Math.max(2, (current.barHeight + next.barHeight) * .25);
+          const blendHue = (current.barHue + next.barHue) / 2;
+          const blendSaturation = (current.saturation + next.saturation) / 2;
+          const blendLightness = (current.lightness + next.lightness) / 2;
+          ctx.fillStyle = `hsl(${blendHue}, ${blendSaturation}%, ${blendLightness}%)`;
+          ctx.fillRect(current.x + barWidth, height - blendHeight - 22, gap, blendHeight);
+        }
       }
       const waveGradient = ctx.createLinearGradient(0, 0, width, 0);
       waveGradient.addColorStop(0, "#70f7d5");
@@ -395,11 +496,7 @@
         const barIndex = Math.min(count - 1, Math.floor(x / width * count));
         const pairCount = Math.ceil(count / 2);
         const pairIndex = Math.floor(barIndex / 2);
-        const position = pairIndex / Math.max(1, pairCount - 1);
-        const frequencyIndex = Math.min(data.length - 1, Math.floor(Math.pow(position, 1.35) * data.length * (Number(frequencyRange.value) / 100)));
-        const neighbor = data[Math.min(data.length - 1, frequencyIndex + 2)];
-        const rawValue = (data[frequencyIndex] * .7 + neighbor * .3) / 255;
-        const barValue = Math.min(.95, Math.max(.025, Math.pow(rawValue, .9) * .78 * (1 + position * .35)));
+        const barValue = softenedAudioValue(pairIndex, pairCount, data);
         const barTop = height - Math.max(4, barValue * height * (Number(heightScale.value) / 100)) - 22;
         const y = barTop - 3 + (waveform[i] - 128) / 128 * 5;
         if (i === 0) ctx.moveTo(x, y);
